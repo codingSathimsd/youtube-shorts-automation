@@ -2,8 +2,8 @@ name: Daily Shorts Automation
 
 on:
   schedule:
-    - cron: '0 8 * * *'  # Runs every day at 8AM UTC
-  workflow_dispatch:       # Also lets you trigger manually
+    - cron: '0 8 * * *'
+  workflow_dispatch:
 
 jobs:
   run-automation:
@@ -19,10 +19,22 @@ jobs:
         with:
           python-version: '3.10'
 
-      - name: Install dependencies
+      - name: Install system dependencies
         run: |
-          pip install -r requirements.txt
-          pip install torch --index-url https://download.pytorch.org/whl/cpu
+          sudo apt-get update
+          sudo apt-get install -y ffmpeg
+
+      - name: Install Python dependencies
+        run: |
+          pip install decorator==4.4.2
+          pip install imageio==2.25.1
+          pip install imageio-ffmpeg==0.4.9
+          pip install moviepy==1.0.3
+          pip install yt-dlp
+          pip install openai-whisper
+          pip install google-generativeai
+          pip install google-auth google-auth-oauthlib google-api-python-client
+          pip install feedparser requests
 
       - name: Run automation
         env:
