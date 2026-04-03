@@ -1,51 +1,32 @@
-from googleapiclient.discovery import build
-from googleapiclient.http import MediaFileUpload
-from google.oauth2.credentials import Credentials
+from pytubefix import YouTube
+from pytubefix.cli import on_progress
 import os
 
-def get_youtube_client():
-    creds = Credentials(
-        token=None,
-        refresh_token=os.environ["YOUTUBE_REFRESH_TOKEN"],
-        client_id=os.environ["YOUTUBE_CLIENT_ID"],
-        client_secret=os.environ["YOUTUBE_CLIENT_SECRET"],
-        token_uri="https://oauth2.googleapis.com/token"
-    )
-    return build('youtube', 'v3', credentials=creds)
+def download_video(url, output_dir="downloads"):
+    os.makedirs(output_dir, exist_ok=True)
 
-def upload_short(clip_path, metadata):
-    youtube = get_youtube_client()
-    title = metadata['title'] + " #Shorts"
-    description = metadata['description'] + "\n\n" + metadata['hashtags']
+    print(f"Fetching video info: {url}")
 
-    body = {
-        'snippet': {
-            'title': title,
-            'description': description,
-            'tags': metadata['tags'] + ['Shorts', 'viral', 'trending'],
-            'categoryId': '22',
-            'defaultLanguage': 'en'
-        },
-        'status': {
-            'privacyStatus': 'public',
-            'selfDeclaredMadeForKids': False
-        }
-    }
+    yt = YouTube(url, on_progress_callback=on_progress)
 
-    media = MediaFileUpload(
-        clip_path,
-        mimetype='video/mp4',
-        resumable=True,
-        chunksize=1024 * 1024
+    print(f"Title: {yt.title}")
+    print(f"Duration: {yt.length}s")
+
+    duration = yt.length
+
+    # Get best mp4 stream
+    stream = (
+        yt.streams
+        .filter(progressive=True, file_extension="mp4")
+        .order_by("resolution")
+        .last()
     )
 
-    print(f"Uploading: {title}")
-    request = youtube.videos().insert(
-        part='snippet,status',
-        body=body,
-        media_body=media
-    )
-    response = request.execute()
-    video_id = response['id']
-    print(f"Uploaded: https://youtube.com/shorts/{video_id}")
-    return video_id
+    if not stream:
+        stream = yt.streams.filter(file_extension="mp4").first()
+
+    print(f"Downloading at: {stream.resolution}")
+    output_path = stream.download(output_path=output_dir)
+    print(f"Saved to: {output_path}")
+
+    return output_path, duration
