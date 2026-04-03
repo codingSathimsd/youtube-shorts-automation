@@ -13,48 +13,43 @@ def cleanup(dirs):
             shutil.rmtree(d)
 
 def main():
-    print("🚀 Starting YouTube Shorts Automation...")
-    
-    # Step 1: Find videos
+    print("Starting YouTube Shorts Automation...")
+
     videos = get_latest_videos()
     print(f"Found {len(videos)} videos to process")
-    
-    for video in videos[:2]:  # Process max 2 videos per run (API limits)
-        print(f"\n📹 Processing: {video['title']}")
-        
+
+    for video in videos[:2]:
+        print(f"\nProcessing: {video['title']}")
         try:
-            # Step 2: Download
+            # Download
             video_path, duration = download_video(video['url'])
-            
-            # Skip if video is too short
+
             if duration < 120:
                 print("Skipping — video too short")
                 continue
-            
-            # Step 3: Create clips
+
+            # Clip
             clip_paths = create_clips(video_path)
-            
-            # Step 4: Transcribe (use first clip for speed)
+
+            # Transcribe
             transcript = add_captions(clip_paths[0])
-            
-            # Step 5 + 6: SEO + Upload each clip
+
+            # SEO + Upload
             for i, clip_path in enumerate(clip_paths):
                 metadata = generate_seo(
                     video['title'],
                     transcript,
                     video['channel']
                 )
-                
                 upload_short(clip_path, metadata)
-                print(f"✅ Clip {i+1} done!")
-        
+                print(f"Clip {i+1} uploaded successfully!")
+
         except Exception as e:
-            print(f"❌ Error processing {video['title']}: {e}")
+            print(f"Error processing {video['title']}: {e}")
             continue
-    
-    # Cleanup temp files
+
     cleanup(['downloads', 'output_clips'])
-    print("\n🎉 Automation complete!")
+    print("\nAutomation complete!")
 
 if __name__ == "__main__":
     main()
