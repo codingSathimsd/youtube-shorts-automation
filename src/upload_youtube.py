@@ -1,32 +1,52 @@
-from pytubefix import YouTube
-from pytubefix.cli import on_progress
+from googleapiclient.discovery import build
+from googleapiclient.http import MediaFileUpload
+from google.oauth2.credentials import Credentials
 import os
 
-def download_video(url, output_dir="downloads"):
-    os.makedirs(output_dir, exist_ok=True)
+def get_youtube_client():
+    creds = Credentials(
+        token=None,
+        refresh_token=os.environ["YOUTUBE_REFRESH_TOKEN"],
+        client_id=os.environ["YOUTUBE_CLIENT_ID"],
+        client_secret=os.environ["YOUTUBE_CLIENT_SECRET"],
+        token_uri="https://oauth2.googleapis.com/token"
+    )
+    return build('youtube', 'v3', credentials=creds)
 
-    print(f"Fetching video info: {url}")
+def upload_short(clip_path, metadata):
+    youtube = get_youtube_client()
+    title = metadata['title'] + " #Shorts"
+    description = metadata['description'] + "\n\n" + metadata['hashtags']
 
-    yt = YouTube(url, on_progress_callback=on_progress)
+    body = {
+        'snippet': {
+            'title': title,
+            'description': description,
+            'tags': metadata['tags'] + ['Shorts', 'viral', 'trending'],
+            'categoryId': '22',
+            'defaultLanguage': 'en'
+        },
+        'status': {
+            'privacyStatus': 'public',
+            'selfDeclaredMadeForKids': False
+        }
+    }
 
-    print(f"Title: {yt.title}")
-    print(f"Duration: {yt.length}s")
-
-    duration = yt.length
-
-    # Get best mp4 stream
-    stream = (
-        yt.streams
-        .filter(progressive=True, file_extension="mp4")
-        .order_by("resolution")
-        .last()
+    media = MediaFileUpload(
+        clip_path,
+        mimetype='video/mp4',
+        resumable=True,
+        chunksize=1024 * 1024
     )
 
-    if not stream:
-        stream = yt.streams.filter(file_extension="mp4").first()
-
-    print(f"Downloading at: {stream.resolution}")
-    output_path = stream.download(output_path=output_dir)
-    print(f"Saved to: {output_path}")
-
-    return output_path, duration
+    print(f"Uploading: {title}")
+    request = youtube.videos().insert(
+        part='snippet,status',
+        body=body,
+        media_body=media
+    )
+    response = request.execute()
+    video_id = response['id']
+    print(f"Uploaded: https://youtube.com/shorts/{video_id}")
+    print(f"Full response: {response}")
+    return video_id
