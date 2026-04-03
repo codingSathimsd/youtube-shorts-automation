@@ -1,4 +1,5 @@
 yt-dlp
+pytubefix
 moviepy==1.0.3
 openai-whisper
 google-generativeai
