@@ -1,14 +1,16 @@
-# ===== CHANNELS TO MONITOR =====
-CHANNELS = [
-    "UCBJycsmduvYEL83R_U4JriQ",  # MrBeast
-    "UC-lHJZR3Gqxm24_Vd_AJ5Yw",  # PewDiePie
-    # Add more channel IDs here
+# ===== TOPICS TO CREATE SHORTS ABOUT =====
+TOPICS = [
+    "motivation",
+    "life hacks",
+    "technology facts",
+    "fitness tips",
+    "money tips",
+    "psychology facts",
+    "productivity",
+    "success mindset",
 ]
 
 # ===== CLIP SETTINGS =====
-CLIP_DURATION_MIN = 30
-CLIP_DURATION_MAX = 59
-CLIPS_PER_VIDEO = 3
-
-# ===== OUTPUT =====
+CLIP_DURATION = 45
+CLIPS_PER_RUN = 3
 OUTPUT_DIR = "output_clips"
