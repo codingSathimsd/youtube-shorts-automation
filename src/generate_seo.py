@@ -4,7 +4,7 @@ import json
 
 def generate_seo(video_title, transcript, channel_name, topic=None):
     genai.configure(api_key=os.environ["GEMINI_API_KEY"])
-    model = genai.GenerativeModel('gemini-1.5-flash')
+    model = genai.GenerativeModel('gemini-2.0-flash')
 
     subject = topic if topic else video_title
 
