@@ -4,7 +4,6 @@ import os
 def download_video(url, output_dir="downloads"):
     os.makedirs(output_dir, exist_ok=True)
 
-    # Write cookies from environment to file
     cookies_content = os.environ.get("YOUTUBE_COOKIES", "")
     cookies_path = "cookies.txt"
 
@@ -16,12 +15,20 @@ def download_video(url, output_dir="downloads"):
         print("WARNING: No cookies found")
 
     ydl_opts = {
-        'format': 'bestvideo[height<=720]+bestaudio/best[height<=720]',
+        # Use simpler format that doesn't need JS challenge
+        'format': 'best[ext=mp4]/best',
         'outtmpl': f'{output_dir}/%(id)s.%(ext)s',
         'merge_output_format': 'mp4',
         'cookiefile': cookies_path,
         'quiet': False,
         'no_warnings': False,
+        # Skip n-challenge entirely
+        'extractor_args': {
+            'youtube': {
+                'skip': ['dash', 'hls'],
+                'player_skip': ['js'],
+            }
+        },
         'http_headers': {
             'User-Agent': 'Mozilla/5.0 (Linux; Android 10) AppleWebKit/537.36'
         }
