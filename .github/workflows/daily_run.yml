@@ -30,7 +30,6 @@ jobs:
           pip install imageio==2.25.1
           pip install imageio-ffmpeg==0.4.9
           pip install moviepy==1.0.3
-          pip install pytubefix
           pip install yt-dlp
           pip install openai-whisper
           pip install google-generativeai
@@ -43,4 +42,5 @@ jobs:
           YOUTUBE_CLIENT_ID: ${{ secrets.YOUTUBE_CLIENT_ID }}
           YOUTUBE_CLIENT_SECRET: ${{ secrets.YOUTUBE_CLIENT_SECRET }}
           YOUTUBE_REFRESH_TOKEN: ${{ secrets.YOUTUBE_REFRESH_TOKEN }}
+          YOUTUBE_COOKIES: ${{ secrets.YOUTUBE_COOKIES }}
         run: python main.py
