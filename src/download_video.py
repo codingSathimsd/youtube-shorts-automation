@@ -1,35 +1,36 @@
-from pytubefix import YouTube
-from pytubefix.cli import on_progress
+import yt_dlp
 import os
 
 def download_video(url, output_dir="downloads"):
     os.makedirs(output_dir, exist_ok=True)
 
-    print(f"Fetching video info: {url}")
+    # Write cookies from environment to file
+    cookies_content = os.environ.get("YOUTUBE_COOKIES", "")
+    cookies_path = "cookies.txt"
 
-    yt = YouTube(url, on_progress_callback=on_progress)
+    if cookies_content:
+        with open(cookies_path, "w") as f:
+            f.write(cookies_content)
+        print("Cookies loaded successfully")
+    else:
+        print("WARNING: No cookies found")
 
-    print(f"Title: {yt.title}")
-    print(f"Duration: {yt.length}s")
+    ydl_opts = {
+        'format': 'bestvideo[height<=720]+bestaudio/best[height<=720]',
+        'outtmpl': f'{output_dir}/%(id)s.%(ext)s',
+        'merge_output_format': 'mp4',
+        'cookiefile': cookies_path,
+        'quiet': False,
+        'no_warnings': False,
+        'http_headers': {
+            'User-Agent': 'Mozilla/5.0 (Linux; Android 10) AppleWebKit/537.36'
+        }
+    }
 
-    duration = yt.length
+    with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+        info = ydl.extract_info(url, download=True)
+        base = os.path.splitext(ydl.prepare_filename(info))[0]
+        filename = base + ".mp4"
+        duration = info.get('duration', 0)
 
-    # Get best mp4 stream
-    stream = (
-        yt.streams
-        .filter(progressive=True, file_extension="mp4")
-        .order_by("resolution")
-        .last()
-    )
-
-    if not stream:
-        stream = yt.streams.filter(file_extension="mp4").first()
-
-    if not stream:
-        raise Exception("No downloadable stream found")
-
-    print(f"Downloading at: {stream.resolution}")
-    output_path = stream.download(output_path=output_dir)
-    print(f"Saved to: {output_path}")
-
-    return output_path, duration
+    return filename, duration
