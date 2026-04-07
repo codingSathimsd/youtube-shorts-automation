@@ -1,25 +1,48 @@
 from moviepy.editor import VideoFileClip, CompositeVideoClip, ColorClip
+import numpy as np
 import os
-from config import CLIP_DURATION, CLIPS_PER_RUN, OUTPUT_DIR
+from config import CLIP_DURATION, OUTPUT_DIR
+
+def find_best_segment(video, clip_duration):
+    duration = video.duration
+    start_boundary = duration * 0.10
+    end_boundary = duration * 0.90
+    usable = end_boundary - start_boundary
+
+    if usable <= clip_duration:
+        return start_boundary, min(start_boundary + clip_duration, end_boundary)
+
+    sample_count = 8
+    segment_size = usable / sample_count
+    best_start = start_boundary
+    best_energy = 0
+
+    for i in range(sample_count):
+        sample_start = start_boundary + (i * segment_size)
+        try:
+            subclip = video.subclip(sample_start, sample_start + min(3, segment_size))
+            if subclip.audio:
+                audio_array = subclip.audio.to_soundarray(fps=22000)
+                energy = float(np.mean(np.abs(audio_array)))
+                if energy > best_energy:
+                    best_energy = energy
+                    best_start = sample_start
+        except:
+            continue
+
+    return best_start, best_start + clip_duration
 
 def reframe_to_vertical(clip):
     target_w, target_h = 1080, 1920
-
     scale = target_h / clip.h
     scaled = clip.resize(scale)
-
     if scaled.w > target_w:
         x_center = scaled.w / 2
         scaled = scaled.crop(
             x1=x_center - target_w / 2,
             x2=x_center + target_w / 2
         )
-
-    bg = ColorClip(
-        (target_w, target_h),
-        color=(0, 0, 0),
-        duration=scaled.duration
-    )
+    bg = ColorClip((target_w, target_h), color=(0, 0, 0), duration=scaled.duration)
     final = CompositeVideoClip([bg, scaled.set_position('center')])
     return final
 
@@ -29,35 +52,25 @@ def create_clips(video_path):
 
     with VideoFileClip(video_path) as video:
         duration = video.duration
-        print(f"Video duration: {duration}s")
+        print(f"Duration: {duration}s")
 
         if duration < CLIP_DURATION:
-            moments = [(0, min(duration - 1, 59))]
+            start, end = 0, min(duration - 1, 54)
         else:
-            clips_to_make = min(CLIPS_PER_RUN, int(duration // CLIP_DURATION))
-            usable = duration * 0.9
-            segment = usable / clips_to_make
-            moments = []
-            for i in range(clips_to_make):
-                start = (i * segment) + (duration * 0.05)
-                end = min(start + CLIP_DURATION, duration - 1)
-                if end > start:
-                    moments.append((start, end))
+            start, end = find_best_segment(video, CLIP_DURATION)
 
-        for i, (start, end) in enumerate(moments):
-            print(f"Creating clip {i+1}/{len(moments)}")
-            subclip = video.subclip(start, end)
-            vertical = reframe_to_vertical(subclip)
-            output_path = f"{OUTPUT_DIR}/clip_{i+1}.mp4"
-            vertical.write_videofile(
-                output_path,
-                fps=30,
-                codec='libx264',
-                audio_codec='aac',
-                verbose=False,
-                logger=None
-            )
-            clip_paths.append(output_path)
-            print(f"Clip {i+1} saved")
+        print(f"Clipping {start:.0f}s to {end:.0f}s")
+        subclip = video.subclip(start, end)
+        vertical = reframe_to_vertical(subclip)
+        output_path = f"{OUTPUT_DIR}/clip_1.mp4"
+        vertical.write_videofile(
+            output_path,
+            fps=30,
+            codec='libx264',
+            audio_codec='aac',
+            verbose=False,
+            logger=None
+        )
+        clip_paths.append(output_path)
 
     return clip_paths
