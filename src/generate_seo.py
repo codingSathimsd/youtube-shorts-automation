@@ -1,89 +1,61 @@
-import google.generativeai as genai
 import os
 import json
-import time
 import random
+from groq import Groq
 
-# Fallback titles per category
-FALLBACK_TITLES = {
-    "psychology": ["This Psychology Trick Will Shock You", "Your Brain Is Lying To You", "Why You Can't Stop Scrolling"],
-    "money": ["Most People Never Learn This About Money", "Do This Before You Turn 25", "Why Rich People Think Differently"],
-    "tech": ["AI Is Changing Everything In 2026", "This Tech Will Replace Your Job", "The Future Is Already Here"],
-    "motivation": ["Do This Every Morning To Win The Day", "Why 99% Of People Stay Broke", "This 1 Habit Changes Everything"],
-    "health": ["Your Body Is Warning You Right Now", "Stop Eating This Immediately", "What Happens When You Sleep"],
-    "default": ["This Will Change How You Think", "Nobody Talks About This", "Watch This Before It's Too Late"],
-}
-
-def get_fallback_title(topic):
-    topic_lower = topic.lower()
-    if any(w in topic_lower for w in ["psych", "mind", "brain", "behavior"]):
-        return random.choice(FALLBACK_TITLES["psychology"])
-    elif any(w in topic_lower for w in ["money", "income", "invest", "rich", "financ"]):
-        return random.choice(FALLBACK_TITLES["money"])
-    elif any(w in topic_lower for w in ["tech", "ai", "artificial", "future"]):
-        return random.choice(FALLBACK_TITLES["tech"])
-    elif any(w in topic_lower for w in ["motiv", "success", "discipl", "self"]):
-        return random.choice(FALLBACK_TITLES["motivation"])
-    elif any(w in topic_lower for w in ["health", "sleep", "body", "food"]):
-        return random.choice(FALLBACK_TITLES["health"])
-    else:
-        return random.choice(FALLBACK_TITLES["default"])
-
-def generate_seo(video_title, transcript, channel_name, topic=None):
-    genai.configure(api_key=os.environ["GEMINI_API_KEY"])
-
-    subject = topic if topic else video_title
-
-    models_to_try = [
-        'gemini-1.5-flash-latest',
-        'gemini-1.5-pro-latest',
-        'gemini-2.0-flash',
-        'gemini-pro',
-    ]
+def generate_facts_and_seo(topic):
+    client = Groq(api_key=os.environ["GROQ_API_KEY"])
 
     prompt = f"""
-You are a viral YouTube Shorts SEO expert in 2026.
-Create metadata for a short video about: {subject}
+You are a viral YouTube Shorts content creator.
+Topic: {topic}
 
-Rules:
-- Title must start with a hook word (Never, Why, How, This, Stop, Watch)
-- Title must create curiosity or urgency
-- Tags must mix broad and specific keywords
-- Description must have a call to action
+Generate content for a 45-second YouTube Short.
 
-Return ONLY valid JSON, no extra text, no markdown:
+Return ONLY valid JSON, no markdown, no extra text:
 {{
-    "title": "Hook-driven title under 60 chars",
-    "description": "2-3 sentences with keywords. End with: Follow for daily facts!",
+    "facts": [
+        "Fact 1 about {topic} — under 15 words, shocking or surprising",
+        "Fact 2 about {topic} — under 15 words, shocking or surprising",
+        "Fact 3 about {topic} — under 15 words, shocking or surprising",
+        "Fact 4 about {topic} — under 15 words, shocking or surprising",
+        "Fact 5 about {topic} — under 15 words, shocking or surprising"
+    ],
+    "hook": "Opening hook sentence under 10 words that creates curiosity",
+    "title": "YouTube Shorts title under 60 chars starting with hook word",
+    "description": "2-3 sentences about the topic with keywords. End with: Follow for daily facts!",
     "tags": ["tag1", "tag2", "tag3", "tag4", "tag5", "tag6", "tag7", "tag8"],
-    "hashtags": "#Shorts #viral #facts #trending #{subject.replace(' ', '').title()[:20]}"
+    "hashtags": "#Shorts #facts #viral #trending #didyouknow"
 }}
 """
 
-    last_error = None
-    for model_name in models_to_try:
-        try:
-            print(f"Trying model: {model_name}")
-            model = genai.GenerativeModel(model_name)
-            time.sleep(2)
-            response = model.generate_content(prompt)
-            text = response.text.strip()
-            text = text.replace("```json", "").replace("```", "").strip()
-            metadata = json.loads(text)
-            print(f"SEO Title: {metadata['title']}")
-            return metadata
-        except Exception as e:
-            print(f"Model {model_name} failed: {str(e)[:80]}")
-            last_error = e
-            time.sleep(3)
-            continue
-
-    # Smart fallback based on topic
-    print("Using smart fallback metadata...")
-    title = get_fallback_title(subject)
-    return {
-        "title": title,
-        "description": f"{title}. These {subject} facts will completely change your perspective. Follow for daily facts that will blow your mind!",
-        "tags": [subject, "facts", "viral", "shorts", "trending", "mindblowing", "didyouknow", "amazing"],
-        "hashtags": f"#Shorts #viral #facts #trending #didyouknow"
-    }
+    try:
+        response = client.chat.completions.create(
+            model="llama3-8b-8192",
+            messages=[{"role": "user", "content": prompt}],
+            temperature=0.7,
+            max_tokens=1000,
+        )
+        text = response.choices[0].message.content.strip()
+        text = text.replace("```json", "").replace("```", "").strip()
+        data = json.loads(text)
+        print(f"Title: {data['title']}")
+        print(f"Facts generated: {len(data['facts'])}")
+        return data
+    except Exception as e:
+        print(f"Groq failed: {e}")
+        # Smart fallback
+        return {
+            "facts": [
+                f"95% of people never learn this about {topic}",
+                f"Scientists discovered something shocking about {topic}",
+                f"This {topic} fact will completely change your mindset",
+                f"Most people get {topic} completely wrong",
+                f"The truth about {topic} nobody talks about"
+            ],
+            "hook": f"You won't believe this about {topic}!",
+            "title": f"Mind Blowing Facts About {topic.title()[:40]}",
+            "description": f"These {topic} facts will completely change how you think. Most people have no idea about this. Follow for daily facts!",
+            "tags": [topic, "facts", "viral", "shorts", "trending", "mindblowing", "didyouknow", "amazing"],
+            "hashtags": "#Shorts #facts #viral #trending #didyouknow"
+        }
