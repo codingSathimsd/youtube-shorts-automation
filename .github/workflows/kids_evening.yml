@@ -1,1 +1,44 @@
+name: KidsViral AI - Evening (Analyze + Learn)
 
+on:
+  schedule:
+    - cron: '0 18 * * *'   # Every day at 6:00 PM UTC
+  workflow_dispatch:
+
+jobs:
+  analyze-and-learn:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: |
+          pip install --upgrade pip
+          pip install -r kids/requirements.txt
+
+      - name: Run evening learning pipeline
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
+          YOUTUBE_CLIENT_ID: ${{ secrets.YOUTUBE_CLIENT_ID }}
+          YOUTUBE_CLIENT_SECRET: ${{ secrets.YOUTUBE_CLIENT_SECRET }}
+          YOUTUBE_REFRESH_TOKEN: ${{ secrets.YOUTUBE_REFRESH_TOKEN }}
+        run: |
+          cd kids
+          python main.py evening
+
+      - name: Commit updated brain
+        run: |
+          git config user.name "KidsViral AI Bot"
+          git config user.email "bot@kidsviral.ai"
+          git add kids/brain.json kids/memory.json || true
+          git diff --staged --quiet || git commit -m "ðŸŒ™ Brain self-improved [$(date +%Y-%m-%d)]"
+          git push || true
