@@ -1,1 +1,55 @@
+name: KidsViral AI - Morning (Produce + Upload)
 
+on:
+  schedule:
+    - cron: '0 7 * * *'   # Every day at 7:00 AM UTC
+  workflow_dispatch:        # Manual trigger for testing
+
+jobs:
+  produce-and-upload:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60     # 60 min max for long video rendering
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y ffmpeg fonts-dejavu-core
+
+      - name: Install Python dependencies
+        run: |
+          pip install --upgrade pip
+          pip install -r kids/requirements.txt
+
+      - name: Download Fredoka One font
+        run: |
+          mkdir -p kids/assets/fonts/Fredoka_One
+          wget -q "https://github.com/google/fonts/raw/main/ofl/fredokaone/FredokaOne-Regular.ttf" \
+            -O kids/assets/fonts/Fredoka_One/FredokaOne-Regular.ttf || echo "Font download failed, using fallback"
+
+      - name: Run morning pipeline
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
+          YOUTUBE_CLIENT_ID: ${{ secrets.YOUTUBE_CLIENT_ID }}
+          YOUTUBE_CLIENT_SECRET: ${{ secrets.YOUTUBE_CLIENT_SECRET }}
+          YOUTUBE_REFRESH_TOKEN: ${{ secrets.YOUTUBE_REFRESH_TOKEN }}
+        run: |
+          cd kids
+          python main.py morning
+
+      - name: Commit updated brain + memory
+        run: |
+          git config user.name "KidsViral AI Bot"
+          git config user.email "bot@kidsviral.ai"
+          git add kids/brain.json kids/memory.json || true
+          git diff --staged --quiet || git commit -m "馃 Update brain + memory [$(date +%Y-%m-%d)]"
+          git push || true
