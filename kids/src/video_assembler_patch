@@ -1,0 +1,28 @@
+# ─────────────────────────────────────────────────────────────
+# REPLACE the get_background_music() function in video_assembler.py
+# with this updated version that generates fresh music daily
+# ─────────────────────────────────────────────────────────────
+
+def get_background_music(topic_plan, video_duration_seconds, output_dir):
+    """Generate fresh unique background music for today's video"""
+    from src.music_generator import generate_music_for_video
+    music_path = generate_music_for_video(topic_plan, video_duration_seconds, output_dir)
+    return music_path
+
+
+# ─────────────────────────────────────────────────────────────
+# ALSO update the assemble_final_video() function signature:
+#
+# OLD:  def assemble_final_video(scene_clips, episode_title, output_dir):
+# NEW:  def assemble_final_video(scene_clips, episode_title, output_dir, topic_plan={}):
+#
+# AND update the music call inside assemble_final_video():
+#
+# OLD:  music_path = get_background_music()
+# NEW:  music_path = get_background_music(topic_plan, final_video.duration, output_dir)
+#
+# AND update the function call in main.py:
+#
+# OLD:  final_path, duration_seconds = assemble_final_video(scene_clips, script["episode_title"], output_dir)
+# NEW:  final_path, duration_seconds = assemble_final_video(scene_clips, script["episode_title"], output_dir, topic_plan)
+# ─────────────────────────────────────────────────────────────
