@@ -1,1 +1,34 @@
+{
+  "best_performing_topics": [],
+  "best_title_formats": [
+    "🌟 {topic} for Kids | Fun Learning Video",
+    "Learn {topic} with {character} | Kids Education",
+    "Amazing {topic} Story for Children | {emotion}",
+    "Why Every Kid Loves {topic} | Cartoon Learning"
+  ],
+  "best_thumbnail_styles": [
+    "bright colorful cartoon with big expressive eyes",
+    "surprised cute animal character with bold text",
+    "cheerful kids illustration with stars and sparkles"
+  ],
+  "trending_topics_today": [],
+  "avg_views_by_category": {
+    "story": 0,
+    "educational": 0,
+    "mixed": 0
+  },
+  "prompt_templates": {
+    "script": "You are a professional kids animation scriptwriter for a top YouTube channel. Write an engaging, fun, educational episode for children aged 3-8.",
+    "image": "cute colorful cartoon illustration, child-friendly, bright colors, happy characters, professional animation style, pixar-like quality",
+    "title": "Create a viral YouTube title for kids content that is exciting, uses emojis, and makes parents want to click"
+  },
+  "video_performance": [],
+  "total_videos_made": 0,
+  "last_updated": "",
+  "channel_niche": "kids education animation",
+  "target_age": "3-8",
+  "posting_frequency": "daily",
+  "best_upload_time": "10:00",
+  "language": "English"
+}
 
