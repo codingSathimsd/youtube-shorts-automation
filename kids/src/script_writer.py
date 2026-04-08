@@ -1,18 +1,33 @@
 import json
-import google.generativeai as genai
+import requests
 from datetime import datetime
-from config import GEMINI_API_KEY, GEMINI_MODEL, SCENE_COUNT
+from config import GROQ_API_KEY, GROQ_MODEL, SCENE_COUNT
+
+GROQ_URL = "https://api.groq.com/openai/v1/chat/completions"
+
+def call_groq(prompt, max_tokens=4000):
+    """Call Groq API"""
+    headers = {
+        "Authorization": f"Bearer {GROQ_API_KEY}",
+        "Content-Type": "application/json"
+    }
+    payload = {
+        "model": GROQ_MODEL,
+        "messages": [{"role": "user", "content": prompt}],
+        "max_tokens": max_tokens,
+        "temperature": 0.85
+    }
+    resp = requests.post(GROQ_URL, headers=headers, json=payload, timeout=60)
+    resp.raise_for_status()
+    return resp.json()["choices"][0]["message"]["content"]
 
 def load_brain():
     with open("kids/brain.json", "r") as f:
         return json.load(f)
 
 def write_full_script(topic_plan):
-    """Generate a full professional kids episode script with Gemini"""
-    print("✍️  Writing full episode script with Gemini...")
-
-    genai.configure(api_key=GEMINI_API_KEY)
-    model = genai.GenerativeModel(GEMINI_MODEL)
+    """Generate a full professional kids episode script using Groq"""
+    print("✍️  Writing full episode script with Groq...")
 
     brain = load_brain()
     base_prompt = brain["prompt_templates"]["script"]
@@ -35,26 +50,26 @@ DATE: {datetime.now().strftime('%B %d, %Y')}
 Write a complete kids animation episode with EXACTLY {SCENE_COUNT} scenes.
 Each scene should be ~35-45 seconds of narration when spoken aloud (about 80-100 words).
 
-The episode structure must be:
-- Scene 1: Exciting intro / hook (grab attention in first 10 seconds)
-- Scenes 2-4: Setup the story world and introduce characters warmly
-- Scenes 5-8: The main adventure / challenge begins
-- Scenes 9-13: The journey, learning moments woven naturally into story
+Episode structure:
+- Scene 1: Exciting intro hook
+- Scenes 2-4: Setup story world and characters
+- Scenes 5-8: Main adventure begins
+- Scenes 9-13: Journey with learning moments
 - Scenes 14-16: Climax and resolution
-- Scene 17: The lesson summarized in a fun, memorable way
-- Scene 18: Outro - say goodbye, ask kids to subscribe and comment
+- Scene 17: Lesson summarized in a fun way
+- Scene 18: Outro - goodbye + subscribe CTA
 
-For EACH scene, provide:
-1. narration: The exact words to be spoken (kid-friendly, simple, enthusiastic, present tense)
-2. image_prompt: A detailed visual description for AI image generation (always include "{image_style}")
-3. scene_title: Short title for this scene
-4. sound_effect: One simple sound effect description (e.g., "happy birds chirping", "magical sparkle sound")
-5. text_overlay: 3-5 word big text to show on screen
+For EACH scene provide:
+1. narration: Exact words to speak (kid-friendly, simple, enthusiastic)
+2. image_prompt: Detailed visual for AI image generation (always include: {image_style})
+3. scene_title: Short title
+4. sound_effect: Simple sound effect description
+5. text_overlay: 3-5 words for big on-screen text
 
-Respond ONLY in this exact JSON format:
+Respond ONLY in this exact JSON format with no extra text:
 {{
   "episode_title": "...",
-  "episode_description": "A 2-sentence description of this episode",
+  "episode_description": "A 2-sentence description",
   "total_scenes": {SCENE_COUNT},
   "scenes": [
     {{
@@ -66,58 +81,63 @@ Respond ONLY in this exact JSON format:
       "text_overlay": "..."
     }}
   ]
-}}
-
-Only respond with the JSON. No extra text."""
+}}"""
 
     try:
-        response = model.generate_content(prompt)
-        text = response.text.strip()
-        text = text.replace("```json", "").replace("```", "").strip()
+        response = call_groq(prompt, max_tokens=4000)
+        # Clean response
+        text = response.strip()
+        if "```json" in text:
+            text = text.split("```json")[1].split("```")[0].strip()
+        elif "```" in text:
+            text = text.split("```")[1].split("```")[0].strip()
+        # Find JSON boundaries
+        start = text.find("{")
+        end = text.rfind("}") + 1
+        if start != -1 and end > start:
+            text = text[start:end]
         script = json.loads(text)
         print(f"✅ Script written: '{script['episode_title']}' with {len(script['scenes'])} scenes")
         return script
     except Exception as e:
         print(f"Script generation error: {e}")
-        # Fallback minimal script
         return generate_fallback_script(topic, character_name, character_type, lesson)
 
 def generate_fallback_script(topic, character_name, character_type, lesson):
-    """Fallback if Gemini fails"""
-    scenes = []
+    """Fallback script if Groq fails"""
     narrations = [
-        f"Hello friends! Welcome to our channel! Today we have an amazing story about {topic}! Are you ready? Let's go!",
-        f"Once upon a time, there was a wonderful {character_type} named {character_name}. {character_name} lived in a beautiful magical land full of colors and adventure!",
-        f"{character_name} woke up one sunny morning feeling very excited. Today was going to be a special day! The birds were singing and the flowers were smiling.",
-        f"As {character_name} looked around, something magical happened! A sparkling light appeared in the sky. What could it be? {character_name} decided to find out!",
-        f"The journey began! {character_name} walked through a rainbow forest where the trees were purple and the grass was golden. Everything was so beautiful!",
-        f"Suddenly {character_name} met a new friend. It was a tiny little creature who looked sad. Oh no! What was wrong? {character_name} went over to help.",
-        f"The little creature said it was lost and couldn't find its home. {character_name} felt so much kindness in their heart and said don't worry I will help you!",
-        f"Together they searched and searched. They crossed a bubbly stream and climbed a gentle hill. Working together made everything more fun!",
-        f"Along the way they discovered something amazing! Did you know that {lesson}? It's true! And it made their journey even more special!",
-        f"They kept going with big smiles on their faces. The sun was warm, the wind was gentle, and every step was an adventure waiting to happen!",
-        f"Oh! They found a clue! A golden arrow pointing the way home. {character_name} felt so happy they were able to help their new friend!",
-        f"They followed the arrow through a meadow full of dancing butterflies. The butterflies seemed to be cheering them on! Fly fly fly!",
-        f"And then! They saw it! The little creature's home was just ahead! It was a cozy little house covered in flowers and surrounded by rainbows!",
-        f"The little creature jumped with joy! Thank you {character_name}! Thank you so much! This is the best day ever! {character_name} felt so warm inside.",
-        f"They celebrated with a big feast of fruits and sweets. They laughed and danced and sang songs together. True friendship is the greatest treasure!",
-        f"As the sun began to set, {character_name} said goodbye and headed home. The stars came out to light the way. What a wonderful adventure!",
-        f"And so friends, today we learned something very important. {lesson}! Remember that whenever you help someone, you make the whole world brighter!",
-        f"That's all for today friends! If you enjoyed this story, give us a big thumbs up and subscribe to our channel! See you next time! Bye bye!"
+        f"Hello friends! Welcome to our amazing channel! Today we have a wonderful story about {topic}! Are you ready? Let's go on an adventure together!",
+        f"Once upon a time there was a wonderful {character_type} named {character_name}. {character_name} lived in a beautiful magical land full of colors and joy!",
+        f"{character_name} woke up one sunny morning feeling very excited. Today was going to be a very special day! The birds were singing and the flowers were smiling!",
+        f"As {character_name} stepped outside something magical sparkled in the sky! A rainbow of colors appeared! What could it mean? {character_name} decided to find out!",
+        f"The adventure began! {character_name} walked through a rainbow forest where the trees were purple and the grass was golden. Everything was so beautiful and magical!",
+        f"Suddenly {character_name} heard a little sound nearby. Someone needed help! {character_name} ran over as fast as possible to see what was happening!",
+        f"There was a tiny little creature who looked very sad and lost. Oh no! {character_name} felt so much kindness in their heart and said I will help you find your way home!",
+        f"Together they walked and searched everywhere! They crossed a bubbly blue stream and climbed a gentle green hill. Working together made everything so much more fun!",
+        f"Along the way they discovered something truly amazing! Did you know that {lesson}? It is absolutely true! This made their journey even more wonderful and special!",
+        f"They kept going with the biggest smiles on their faces. Every single step was a new adventure. The sun was warm and the wind was gentle and everything felt magical!",
+        f"Look! They found a clue! A golden glowing arrow pointing the way forward! {character_name} felt so happy they were helping their new friend find the way home!",
+        f"They followed the arrow through a beautiful meadow full of dancing butterflies. The butterflies seemed to be cheering them on! It was the most magical sight ever!",
+        f"And then suddenly they saw it! The little creature's home was just ahead! It was a cozy little house covered in colorful flowers and surrounded by beautiful rainbows!",
+        f"The little creature jumped with pure joy! Thank you so much {character_name}! You are the kindest friend in the whole wide world! This is the best day of my life!",
+        f"They celebrated together with a big feast of yummy fruits and sweet treats! They laughed and danced and sang happy songs. True friendship is the greatest treasure!",
+        f"As the beautiful sun began to set {character_name} said a warm goodbye and headed home. The stars came out one by one to light the way. What a wonderful adventure!",
+        f"And so dear friends today we all learned something very very important together. {lesson}! Always remember that when you help someone you make the whole world brighter!",
+        f"That is all for today amazing friends! If you loved this story please give us a big thumbs up and subscribe to our channel for a brand new story every single day! Bye bye!"
     ]
+    scenes = []
     for i, narration in enumerate(narrations[:SCENE_COUNT]):
         scenes.append({
             "scene_number": i + 1,
-            "scene_title": f"Scene {i+1}",
+            "scene_title": f"Scene {i + 1}",
             "narration": narration,
-            "image_prompt": f"cute colorful cartoon illustration of {character_name} the {character_type}, scene {i+1}, bright colors, child-friendly, pixar style",
-            "sound_effect": "gentle background music",
+            "image_prompt": f"cute colorful cartoon illustration of {character_name} the {character_type}, bright vivid colors, child-friendly, pixar style, scene {i + 1}",
+            "sound_effect": "gentle cheerful background music",
             "text_overlay": topic[:20]
         })
     return {
         "episode_title": f"{topic} | Kids Story",
-        "episode_description": f"Join {character_name} on an amazing adventure! A fun story for kids about {lesson}.",
+        "episode_description": f"Join {character_name} on an amazing adventure! A fun story about {lesson}.",
         "total_scenes": len(scenes),
         "scenes": scenes
 }
-
