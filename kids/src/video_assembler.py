@@ -1,12 +1,12 @@
 import os
 import numpy as np
 from PIL import Image, ImageDraw, ImageFont
-from moviepy.editor import (
-    concatenate_videoclips, AudioFileClip, CompositeAudioClip,
-    VideoClip, concatenate_audioclips
-)
-from config import VIDEO_WIDTH, VIDEO_HEIGHT, FPS, OUTPUT_DIR, CHANNEL_NAME
-from src.music_generator import generate_music_for_video
+
+# ✅ Correct moviepy 1.0.3 imports — no moviepy.editor needed
+from moviepy.video.VideoClip import VideoClip
+from moviepy.audio.io.AudioFileClip import AudioFileClip
+
+from config import VIDEO_WIDTH, VIDEO_HEIGHT, FPS
 
 def get_font(size=80):
     """Load kids-friendly font or fallback"""
@@ -23,213 +23,130 @@ def get_font(size=80):
                 continue
     return ImageFont.load_default()
 
-# ── Intro clip ────────────────────────────────────────────────────────────────
+def apply_ken_burns(image_path, duration, zoom_direction="in"):
+    """Apply Ken Burns zoom/pan effect to make image feel alive"""
+    img = Image.open(image_path).convert("RGB")
+    img = img.resize((VIDEO_WIDTH, VIDEO_HEIGHT), Image.LANCZOS)
+    img_array = np.array(img)
 
-def create_intro_clip(episode_title, duration=5):
-    """Create a branded animated intro clip"""
-    def make_intro_frame(t):
-        img = Image.new('RGB', (VIDEO_WIDTH, VIDEO_HEIGHT), '#FFD700')
-        draw = ImageDraw.Draw(img)
+    def make_frame(t):
+        progress = t / max(duration, 0.1)
+        if zoom_direction == "in":
+            scale = 1.0 + 0.08 * progress
+            offset_x = int((scale - 1) * VIDEO_WIDTH * 0.5 * progress)
+            offset_y = int((scale - 1) * VIDEO_HEIGHT * 0.5 * progress)
+        else:
+            scale = 1.08 - 0.08 * progress
+            offset_x = int((scale - 1) * VIDEO_WIDTH * 0.5 * (1 - progress))
+            offset_y = int((scale - 1) * VIDEO_HEIGHT * 0.5 * (1 - progress))
 
-        # Animated gradient background
-        for i in range(VIDEO_HEIGHT):
-            alpha = i / VIDEO_HEIGHT
-            r = int(255 * (1 - alpha * 0.3))
-            g = int(215 * (1 - alpha * 0.1))
-            b = int(alpha * 120)
-            draw.line([(0, i), (VIDEO_WIDTH, i)], fill=(r, g, b))
+        new_w = int(VIDEO_WIDTH * scale)
+        new_h = int(VIDEO_HEIGHT * scale)
+        pil_img = Image.fromarray(img_array)
+        pil_img = pil_img.resize((new_w, new_h), Image.LANCZOS)
+        left = max(0, min(offset_x, new_w - VIDEO_WIDTH))
+        top = max(0, min(offset_y, new_h - VIDEO_HEIGHT))
+        pil_img = pil_img.crop((left, top, left + VIDEO_WIDTH, top + VIDEO_HEIGHT))
+        return np.array(pil_img)
 
-        # Bouncing stars
-        for j in range(25):
-            x = (j * 97 + int(t * 60)) % VIDEO_WIDTH
-            y = (j * 73 + int(t * 40)) % VIDEO_HEIGHT
-            size = 10 + (j % 6) * 8
-            draw.ellipse([x, y, x + size, y + size], fill='white')
+    return make_frame
 
-        font_large = get_font(120)
-        font_small = get_font(55)
+def add_text_to_frame(frame, text, scene_number):
+    """Add big colorful text overlay on a frame"""
+    if not text or len(text.strip()) == 0:
+        return frame
 
-        # Channel name with shadow
-        channel_text = CHANNEL_NAME
-        try:
-            bbox = draw.textbbox((0, 0), channel_text, font=font_large)
-            tw = bbox[2] - bbox[0]
-        except:
-            tw = len(channel_text) * 70
-        x = (VIDEO_WIDTH - tw) // 2
-        draw.text((x + 5, VIDEO_HEIGHT // 2 - 90 + 5), channel_text, font=font_large, fill='#CC6600')
-        draw.text((x, VIDEO_HEIGHT // 2 - 90), channel_text, font=font_large, fill='white')
+    pil_img = Image.fromarray(frame)
+    draw = ImageDraw.Draw(pil_img)
+    font = get_font(90)
+    text = text.upper()[:40]
 
-        # Episode title below
-        short_title = episode_title[:50]
-        try:
-            bbox2 = draw.textbbox((0, 0), short_title, font=font_small)
-            tw2 = bbox2[2] - bbox2[0]
-        except:
-            tw2 = len(short_title) * 32
-        x2 = (VIDEO_WIDTH - tw2) // 2
-        draw.text((x2, VIDEO_HEIGHT // 2 + 60), short_title, font=font_small, fill='#FFD700')
+    try:
+        bbox = draw.textbbox((0, 0), text, font=font)
+        text_w = bbox[2] - bbox[0]
+        text_h = bbox[3] - bbox[1]
+    except:
+        text_w = len(text) * 50
+        text_h = 100
 
-        return np.array(img)
+    x = (VIDEO_WIDTH - text_w) // 2
+    y = VIDEO_HEIGHT - text_h - 80
 
-    intro = VideoClip(make_intro_frame, duration=duration).set_fps(FPS)
-    return intro
+    # Shadow
+    for dx in [-3, 0, 3]:
+        for dy in [-3, 0, 3]:
+            draw.text((x + dx, y + dy), text, font=font, fill="black")
 
-# ── Outro clip ────────────────────────────────────────────────────────────────
+    # Colored text — different color per scene
+    colors = ["#FFD700", "#FF6B35", "#FF1493", "#00CED1", "#7B68EE"]
+    color = colors[scene_number % len(colors)]
+    draw.text((x, y), text, font=font, fill=color)
 
-def create_outro_clip(duration=8):
-    """Create an animated subscribe CTA outro"""
-    def make_outro_frame(t):
-        img = Image.new('RGB', (VIDEO_WIDTH, VIDEO_HEIGHT), '#FF4444')
-        draw = ImageDraw.Draw(img)
+    return np.array(pil_img)
 
-        # Gradient background
-        for i in range(VIDEO_HEIGHT):
-            alpha = i / VIDEO_HEIGHT
-            r = int(255 - alpha * 50)
-            g = int(68 + alpha * 50)
-            b = int(68 + alpha * 100)
-            draw.line([(0, i), (VIDEO_WIDTH, i)], fill=(r, g, b))
+def apply_fade(clip, fade_duration=0.5):
+    """✅ Safe fade using crossfadein/crossfadeout — works in moviepy 1.0.3"""
+    try:
+        clip = clip.crossfadein(fade_duration)
+        clip = clip.crossfadeout(fade_duration)
+    except:
+        pass  # skip fade if it fails, don't crash
+    return clip
 
-        font = get_font(85)
-        font_btn = get_font(58)
+def build_scene_clip(scene, image_path, audio_path, audio_duration):
+    """Build one animated scene clip with Ken Burns + text + audio"""
+    scene_num = scene["scene_number"]
+    text_overlay = scene.get("text_overlay", "")
+    zoom_dir = "in" if scene_num % 2 == 0 else "out"
+    duration = audio_duration + 0.5
 
-        # Main text
-        lines = ["Thanks for watching! 🌟", "New video EVERY day!"]
-        for i, line in enumerate(lines):
-            try:
-                bbox = draw.textbbox((0, 0), line, font=font)
-                tw = bbox[2] - bbox[0]
-            except:
-                tw = len(line) * 48
-            x = (VIDEO_WIDTH - tw) // 2
-            draw.text((x + 3, 180 + i * 140 + 3), line, font=font, fill='#AA0000')
-            draw.text((x, 180 + i * 140), line, font=font, fill='white')
+    make_frame = apply_ken_burns(image_path, duration, zoom_dir)
 
-        # Pulsing subscribe button
-        pulse = 1.0 + 0.06 * np.sin(t * 3.5)
-        btn_w = int(520 * pulse)
-        btn_h = int(115 * pulse)
-        btn_x = (VIDEO_WIDTH - btn_w) // 2
-        btn_y = VIDEO_HEIGHT // 2 + 100
-        draw.rounded_rectangle(
-            [btn_x, btn_y, btn_x + btn_w, btn_y + btn_h],
-            radius=35, fill='#CC0000'
-        )
-        sub_text = "✅ SUBSCRIBE 🔔"
-        try:
-            bbox = draw.textbbox((0, 0), sub_text, font=font_btn)
-            tw = bbox[2] - bbox[0]
-        except:
-            tw = len(sub_text) * 34
-        draw.text(((VIDEO_WIDTH - tw) // 2, btn_y + 28), sub_text, font=font_btn, fill='white')
-
-        return np.array(img)
-
-    outro = VideoClip(make_outro_frame, duration=duration).set_fps(FPS)
-    return outro
-
-# ── Final assembly ────────────────────────────────────────────────────────────
-
-def assemble_final_video(scene_clips, episode_title, output_dir, topic_plan={}):
-    """
-    Assemble all scene clips into a final polished video with:
-    - Branded intro
-    - All scenes with Ken Burns + voice narration
-    - Subscribe outro
-    - Fresh AI-generated background music every day
-    - Voice narration clearly mixed over soft background music
-    """
-    print("🎞️  Assembling final video...")
-    os.makedirs(output_dir, exist_ok=True)
-    final_path = os.path.join(output_dir, "final_video.mp4")
-
-    # ── Step 1: Build full clip sequence ─────────────────────────────────────
-    print("  📽️  Building clip sequence...")
-    all_clips = []
-    intro = create_intro_clip(episode_title, duration=5)
-    all_clips.append(intro)
-    all_clips.extend(scene_clips)
-    outro = create_outro_clip(duration=8)
-    all_clips.append(outro)
-
-    print(f"  Concatenating {len(all_clips)} clips "
-          f"(1 intro + {len(scene_clips)} scenes + 1 outro)...")
-    final_video = concatenate_videoclips(all_clips, method="compose")
-    video_duration = final_video.duration
-    print(f"  ✅ Total video duration: {video_duration / 60:.1f} minutes")
-
-    # ── Step 2: Generate fresh AI background music ────────────────────────────
-    print("\n  🎵 Generating today's fresh background music...")
-    music_path = generate_music_for_video(
-        topic_plan=topic_plan,
-        video_duration_seconds=video_duration,
-        output_dir=output_dir
-    )
-
-    # ── Step 3: Mix voice narration + background music ────────────────────────
-    if music_path and os.path.exists(music_path):
-        try:
-            print("  🎚️  Mixing voice narration + background music...")
-            music = AudioFileClip(music_path)
-
-            # Loop music if it's shorter than the video
-            if music.duration < video_duration:
-                loops = int(video_duration / music.duration) + 2
-                music = concatenate_audioclips([music] * loops)
-
-            # Trim music to exact video length
-            music = music.subclip(0, video_duration)
-
-            # Music very soft so voice is always crystal clear
-            music = music.volumex(0.10)
-
-            if final_video.audio:
-                # Voice at full volume + music softly underneath
-                final_audio = CompositeAudioClip([
-                    final_video.audio.volumex(1.0),
-                    music
-                ])
-                final_video = final_video.set_audio(final_audio)
-                print("  ✅ Voice + music mixed successfully")
-            else:
-                # No voice track — use music only
-                final_video = final_video.set_audio(music)
-                print("  ✅ Background music set (no voice track found)")
-
-        except Exception as e:
-            print(f"  ⚠️  Music mixing error — continuing voice only: {e}")
+    if text_overlay:
+        def frame_with_text(t):
+            frame = make_frame(t)
+            if duration * 0.2 < t < duration * 0.85:
+                frame = add_text_to_frame(frame, text_overlay, scene_num)
+            return frame
+        video_clip = VideoClip(frame_with_text, duration=duration).set_fps(FPS)
     else:
-        print("  ⚠️  Music generation failed — continuing with voice only")
+        video_clip = VideoClip(make_frame, duration=duration).set_fps(FPS)
 
-    # ── Step 4: Render final video file ──────────────────────────────────────
-    print(f"\n  🎬 Rendering final MP4 ({video_duration / 60:.1f} min)...")
-    print("  ⏳ This takes 10-20 minutes on GitHub Actions — please wait...")
+    # Add audio
+    if audio_path and os.path.exists(audio_path):
+        audio_clip = AudioFileClip(audio_path)
+        video_clip = video_clip.set_audio(audio_clip)
 
-    final_video.write_videofile(
-        final_path,
-        fps=FPS,
-        codec='libx264',
-        audio_codec='aac',
-        bitrate='4000k',
-        audio_bitrate='192k',
-        threads=4,
-        preset='fast',
-        logger=None
-    )
+    # ✅ Safe fade in/out
+    video_clip = apply_fade(video_clip, fade_duration=0.5)
 
-    # ── Step 5: Clean up temp music file ─────────────────────────────────────
-    if music_path and os.path.exists(music_path):
+    print(f"  🎬 Scene {scene_num}: built ({duration:.1f}s)")
+    return video_clip
+
+def build_all_scenes(scenes, image_data, voice_data):
+    """Build all scene clips"""
+    print("🎬 Building scene clips...")
+
+    image_map = {d["scene_number"]: d["image_path"] for d in image_data}
+    voice_map = {d["scene_number"]: (d["audio_path"], d["duration"]) for d in voice_data}
+
+    clips = []
+    for scene in scenes:
+        scene_num = scene["scene_number"]
+        image_path = image_map.get(scene_num)
+        audio_path, duration = voice_map.get(scene_num, (None, 40.0))
+
+        if not image_path or not os.path.exists(image_path):
+            print(f"  ⚠️  Skipping scene {scene_num}: missing image")
+            continue
+
         try:
-            os.remove(music_path)
-            print("  🧹 Temp music file cleaned up")
-        except:
-            pass
+            clip = build_scene_clip(scene, image_path, audio_path, duration)
+            clips.append(clip)
+        except Exception as e:
+            print(f"  ⚠️  Scene {scene_num} error: {e}")
+            continue
 
-    print(f"\n✅ Final video ready!")
-    print(f"   Path     : {final_path}")
-    print(f"   Duration : {video_duration / 60:.1f} minutes")
-    print(f"   File size: {os.path.getsize(final_path) / 1024 / 1024:.1f} MB")
-
-    return final_path, video_duration
-
+    print(f"✅ Built {len(clips)} scene clips")
+    return clips
+        
