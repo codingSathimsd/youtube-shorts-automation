@@ -4,7 +4,6 @@ import shutil
 import json
 from datetime import datetime
 
-# Add parent dir to path so config.py is found
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from config import OUTPUT_DIR
@@ -34,7 +33,8 @@ def cleanup():
     os.makedirs(OUTPUT_DIR, exist_ok=True)
 
 def check_secrets():
-    required = ["GEMINI_API_KEY", "GROQ_API_KEY", "YOUTUBE_CLIENT_ID",
+    # ✅ GROQ only — no Gemini
+    required = ["GROQ_API_KEY", "YOUTUBE_CLIENT_ID",
                 "YOUTUBE_CLIENT_SECRET", "YOUTUBE_REFRESH_TOKEN"]
     missing = [k for k in required if not os.environ.get(k)]
     if missing:
@@ -85,9 +85,10 @@ def morning_pipeline():
             raise Exception("No scene clips were built!")
 
         # STEP 6: Assemble final video
+        # ✅ topic_plan passed so music matches video mood
         print("\n[6/7] 🎞️  Assembling final video...")
         final_path, duration_seconds = assemble_final_video(
-            scene_clips, script["episode_title"], output_dir)
+            scene_clips, script["episode_title"], output_dir, topic_plan)
 
         # STEP 7: Generate SEO + Upload
         print("\n[7/7] 🏷️  Generating SEO + Uploading...")
@@ -119,11 +120,8 @@ def evening_pipeline():
     load_env()
 
     try:
-        # Analyze performance
         insights = analyze_performance()
-        # Self-learn and improve
         run_learning_cycle(insights)
-
         print("\n✅ Evening pipeline complete!")
         print("🧠 Brain updated for tomorrow's better video")
         print("="*60)
@@ -138,4 +136,4 @@ if __name__ == "__main__":
         evening_pipeline()
     else:
         morning_pipeline()
-      
+        
