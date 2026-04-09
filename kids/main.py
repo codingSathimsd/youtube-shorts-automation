@@ -1,7 +1,6 @@
 import os
 import sys
 import shutil
-import json
 from datetime import datetime
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -33,7 +32,6 @@ def cleanup():
     os.makedirs(OUTPUT_DIR, exist_ok=True)
 
 def check_secrets():
-    # ✅ GROQ only — no Gemini
     required = ["GROQ_API_KEY", "YOUTUBE_CLIENT_ID",
                 "YOUTUBE_CLIENT_SECRET", "YOUTUBE_REFRESH_TOKEN"]
     missing = [k for k in required if not os.environ.get(k)]
@@ -44,9 +42,8 @@ def check_secrets():
     return True
 
 def morning_pipeline():
-    """Morning job: Research → Script → Produce → Upload"""
     print("\n" + "="*60)
-    print(f"🌅 KidsViral AI - Morning Pipeline")
+    print("🌅 KidsViral AI - Morning Pipeline")
     print(f"📅 {datetime.now().strftime('%B %d, %Y %H:%M UTC')}")
     print("="*60)
 
@@ -58,46 +55,47 @@ def morning_pipeline():
     output_dir = OUTPUT_DIR
 
     try:
-        # STEP 1: Research trends
+        # STEP 1: Research
         print("\n[1/7] 🔍 Researching trends...")
         topic_plan = research_today()
-        print(f"  Topic: {topic_plan['topic']}")
+        topic      = topic_plan.get("topic", "Kids Story")
+        print(f"  Topic: {topic}")
 
-        # STEP 2: Write full script
-        print("\n[2/7] ✍️  Writing episode script...")
+        # STEP 2: Script
+        print("\n[2/7] ✍️  Writing script...")
         script = write_full_script(topic_plan)
         scenes = script["scenes"]
 
-        # STEP 3: Generate all images
-        print("\n[3/7] 🖼️  Generating scene images...")
-        image_data = generate_all_images(scenes, topic_plan, output_dir)
+        # STEP 3: Images (used for thumbnail only now)
+        print("\n[3/7] 🖼️  Generating thumbnail...")
+        image_data     = []  # animator handles all visuals
         thumbnail_path = generate_thumbnail_image(topic_plan, script, output_dir)
 
-        # STEP 4: Generate all voices
-        print("\n[4/7] 🎙️  Generating voice narrations...")
+        # STEP 4: Voice
+        print("\n[4/7] 🎙️  Generating voices...")
         voice_data = generate_all_voices(scenes, output_dir)
 
-        # STEP 5: Build scene clips
-        print("\n[5/7] 🎬 Building scene clips...")
-        scene_clips = build_all_scenes(scenes, image_data, voice_data)
+        # STEP 5: Build animated scenes
+        print("\n[5/7] 🎬 Building animated scenes...")
+        scene_clips = build_all_scenes(
+            scenes, image_data, voice_data, topic=topic)
 
         if not scene_clips:
-            raise Exception("No scene clips were built!")
+            raise Exception("No scene clips built!")
 
         # STEP 6: Assemble final video
-        # ✅ topic_plan passed so music matches video mood
         print("\n[6/7] 🎞️  Assembling final video...")
         final_path, duration_seconds = assemble_final_video(
             scene_clips, script["episode_title"], output_dir, topic_plan)
 
-        # STEP 7: Generate SEO + Upload
-        print("\n[7/7] 🏷️  Generating SEO + Uploading...")
-        seo_data = generate_viral_seo(topic_plan, script, duration_seconds / 60)
+        # STEP 7: SEO + Upload
+        print("\n[7/7] 🏷️  SEO + Uploading...")
+        seo_data = generate_viral_seo(topic_plan, script, duration_seconds/60)
         video_id = upload_video(final_path, seo_data, thumbnail_path)
         log_upload(video_id, seo_data["title"], topic_plan)
 
         print("\n" + "="*60)
-        print(f"🎉 SUCCESS! Video published!")
+        print("🎉 SUCCESS!")
         print(f"📺 https://youtube.com/watch?v={video_id}")
         print(f"🎬 Title: {seo_data['title']}")
         print(f"⏱️  Duration: {duration_seconds/60:.1f} minutes")
@@ -105,30 +103,25 @@ def morning_pipeline():
 
     except Exception as e:
         import traceback
-        print(f"\n❌ Pipeline error: {traceback.format_exc()}")
+        print(f"\n❌ Error: {traceback.format_exc()}")
         sys.exit(1)
     finally:
         cleanup()
 
 def evening_pipeline():
-    """Evening job: Analyze → Learn → Improve"""
     print("\n" + "="*60)
-    print(f"🌙 KidsViral AI - Evening Learning Pipeline")
+    print("🌙 KidsViral AI - Evening Learning")
     print(f"📅 {datetime.now().strftime('%B %d, %Y %H:%M UTC')}")
     print("="*60)
 
     load_env()
-
     try:
         insights = analyze_performance()
         run_learning_cycle(insights)
-        print("\n✅ Evening pipeline complete!")
-        print("🧠 Brain updated for tomorrow's better video")
-        print("="*60)
-
+        print("✅ Evening pipeline complete!")
     except Exception as e:
         import traceback
-        print(f"\n❌ Evening pipeline error: {traceback.format_exc()}")
+        print(f"\n❌ Error: {traceback.format_exc()}")
 
 if __name__ == "__main__":
     mode = sys.argv[1] if len(sys.argv) > 1 else "morning"
